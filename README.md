@@ -1,5 +1,8 @@
 # Config Module
 
+[![Go CI](https://github.com/Snider/config/actions/workflows/ci.yml/badge.svg)](https://github.com/Snider/config/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/Snider/config/branch/main/graph/badge.svg)](https://codecov.io/gh/Snider/config)
+
 This repository is a config module for the Core Framework. It includes a Go backend, an Angular custom element, and a full release cycle configuration.
 
 ## Getting Started
