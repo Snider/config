@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/your-username/core-element-template/cmd/demo-cli/cmd"
+	"github.com/Snider/config/cmd/demo-cli/cmd"
 )
 
 func main() {
