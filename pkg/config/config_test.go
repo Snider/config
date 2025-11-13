@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Snider/Core/pkg/core"
+	"github.com/Snider/config/pkg/core"
 )
 
 // setupTestEnv creates a temporary home directory for testing and ensures a clean environment.
@@ -127,6 +127,144 @@ func TestConfigService(t *testing.T) {
 
 		if actualValue != expectedValue {
 			t.Errorf("Expected value '%s', got '%s'", expectedValue, actualValue)
+		}
+	})
+
+	t.Run("Save and Load Struct", func(t *testing.T) {
+		_, cleanup := setupTestEnv(t)
+		defer cleanup()
+
+		s, err := New()
+		if err != nil {
+			t.Fatalf("New() failed: %v", err)
+		}
+
+		type CustomConfig struct {
+			APIKey  string `json:"apiKey"`
+			Timeout int    `json:"timeout"`
+		}
+
+		key := "custom"
+		expectedConfig := CustomConfig{
+			APIKey:  "12345",
+			Timeout: 30,
+		}
+
+		if err := s.SaveStruct(key, expectedConfig); err != nil {
+			t.Fatalf("SaveStruct() failed: %v", err)
+		}
+
+		var actualConfig CustomConfig
+		if err := s.LoadStruct(key, &actualConfig); err != nil {
+			t.Fatalf("LoadStruct() failed: %v", err)
+		}
+
+		if actualConfig.APIKey != expectedConfig.APIKey {
+			t.Errorf("Expected APIKey '%s', got '%s'", expectedConfig.APIKey, actualConfig.APIKey)
+		}
+		if actualConfig.Timeout != expectedConfig.Timeout {
+			t.Errorf("Expected Timeout '%d', got '%d'", expectedConfig.Timeout, actualConfig.Timeout)
+		}
+	})
+
+	t.Run("Load non-existent struct", func(t *testing.T) {
+		_, cleanup := setupTestEnv(t)
+		defer cleanup()
+
+		s, err := New()
+		if err != nil {
+			t.Fatalf("New() failed: %v", err)
+		}
+
+		type CustomConfig struct {
+			APIKey  string `json:"apiKey"`
+			Timeout int    `json:"timeout"`
+		}
+
+		var actualConfig CustomConfig
+		if err := s.LoadStruct("non-existent", &actualConfig); err != nil {
+			t.Fatalf("LoadStruct() failed: %v", err)
+		}
+
+		// Expect the struct to be zero-valued
+		if actualConfig.APIKey != "" {
+			t.Errorf("Expected empty APIKey, got '%s'", actualConfig.APIKey)
+		}
+		if actualConfig.Timeout != 0 {
+			t.Errorf("Expected zero Timeout, got '%d'", actualConfig.Timeout)
+		}
+	})
+
+	t.Run("Get non-existent key", func(t *testing.T) {
+		_, cleanup := setupTestEnv(t)
+		defer cleanup()
+
+		s, err := New()
+		if err != nil {
+			t.Fatalf("New() failed: %v", err)
+		}
+
+		var value string
+		err = s.Get("non-existent", &value)
+		if err == nil {
+			t.Errorf("Expected an error for non-existent key, but got nil")
+		}
+	})
+
+	t.Run("Set non-existent key", func(t *testing.T) {
+		_, cleanup := setupTestEnv(t)
+		defer cleanup()
+
+		s, err := New()
+		if err != nil {
+			t.Fatalf("New() failed: %v", err)
+		}
+
+		err = s.Set("non-existent", "value")
+		if err == nil {
+			t.Errorf("Expected an error for non-existent key, but got nil")
+		}
+	})
+
+	t.Run("SaveStruct with unmarshallable type", func(t *testing.T) {
+		_, cleanup := setupTestEnv(t)
+		defer cleanup()
+
+		s, err := New()
+		if err != nil {
+			t.Fatalf("New() failed: %v", err)
+		}
+
+		err = s.SaveStruct("test", make(chan int))
+		if err == nil {
+			t.Errorf("Expected an error for unmarshallable type, but got nil")
+		}
+	})
+
+	t.Run("LoadStruct with invalid JSON", func(t *testing.T) {
+		_, cleanup := setupTestEnv(t)
+		defer cleanup()
+
+		s, err := New()
+		if err != nil {
+			t.Fatalf("New() failed: %v", err)
+		}
+
+		key := "invalid"
+		filePath := filepath.Join(s.ConfigDir, key+".json")
+		if err := os.WriteFile(filePath, []byte("invalid json"), 0644); err != nil {
+			t.Fatalf("Failed to write invalid json file: %v", err)
+		}
+
+		type CustomConfig struct {
+			APIKey  string `json:"apiKey"`
+			Timeout int    `json:"timeout"`
+		}
+
+		var actualConfig CustomConfig
+		err = s.LoadStruct(key, &actualConfig)
+		if err == nil {
+			t.Errorf("Expected an error for invalid JSON, but got nil")
 		}
 	})
 }
