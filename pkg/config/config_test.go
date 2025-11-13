@@ -46,7 +46,7 @@ func newTestCore(t *testing.T) *core.Core {
 	return c
 }
 
-func TestConfigService(t *testing.T) {
+func TestConfigServiceGood(t *testing.T) {
 	t.Run("New service creates default config", func(t *testing.T) {
 		_, cleanup := setupTestEnv(t)
 		defer cleanup()
@@ -166,7 +166,66 @@ func TestConfigService(t *testing.T) {
 			t.Errorf("Expected Timeout '%d', got '%d'", expectedConfig.Timeout, actualConfig.Timeout)
 		}
 	})
+}
 
+func TestConfigServiceUgly(t *testing.T) {
+	t.Run("LoadStruct with nil value", func(t *testing.T) {
+		_, cleanup := setupTestEnv(t)
+		defer cleanup()
+
+		s, err := New()
+		if err != nil {
+			t.Fatalf("New() failed: %v", err)
+		}
+
+		key := "nil-value"
+		filePath := filepath.Join(s.ConfigDir, key+".json")
+		if err := os.WriteFile(filePath, []byte("null"), 0644); err != nil {
+			t.Fatalf("Failed to write nil value file: %v", err)
+		}
+
+		type CustomConfig struct {
+			APIKey  string `json:"apiKey"`
+			Timeout int    `json:"timeout"`
+		}
+
+		var actualConfig CustomConfig
+		err = s.LoadStruct(key, &actualConfig)
+		if err != nil {
+			t.Fatalf("LoadStruct() should not have failed with a nil value, but it did: %v", err)
+		}
+	})
+
+	t.Run("Concurrent access", func(t *testing.T) {
+		_, cleanup := setupTestEnv(t)
+		defer cleanup()
+
+		s, err := New()
+		if err != nil {
+			t.Fatalf("New() failed: %v", err)
+		}
+
+		// Run concurrent Set and Get operations
+		done := make(chan bool)
+		for i := 0; i < 10; i++ {
+			go func() {
+				s.Set("language", "en")
+				done <- true
+			}()
+			go func() {
+				var lang string
+				s.Get("language", &lang)
+				done <- true
+			}()
+		}
+
+		for i := 0; i < 20; i++ {
+			<-done
+		}
+	})
+}
+
+func TestConfigServiceBad(t *testing.T) {
 	t.Run("Load non-existent struct", func(t *testing.T) {
 		_, cleanup := setupTestEnv(t)
 		defer cleanup()
@@ -265,6 +324,26 @@ func TestConfigService(t *testing.T) {
 		err = s.LoadStruct(key, &actualConfig)
 		if err == nil {
 			t.Errorf("Expected an error for invalid JSON, but got nil")
+		}
+	})
+
+	t.Run("New service with empty config file", func(t *testing.T) {
+		tempHomeDir, cleanup := setupTestEnv(t)
+		defer cleanup()
+
+		// Manually create an empty config file
+		configDir := filepath.Join(tempHomeDir, appName, "config")
+		if err := os.MkdirAll(configDir, os.ModePerm); err != nil {
+			t.Fatalf("Failed to create test config dir: %v", err)
+		}
+		configPath := filepath.Join(configDir, configFileName)
+		if err := os.WriteFile(configPath, []byte(""), 0644); err != nil {
+			t.Fatalf("Failed to write empty config file: %v", err)
+		}
+
+		_, err := New()
+		if err == nil {
+			t.Fatalf("New() should have failed with an empty config file, but it did not")
 		}
 	})
 }
