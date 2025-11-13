@@ -1,4 +1,4 @@
-module github.com/your-username/core-element-template
+module github.com/Snider/config
 
 go 1.24.3
 
