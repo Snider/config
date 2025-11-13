@@ -9,7 +9,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/Snider/Core/pkg/core"
+	"github.com/Snider/config/pkg/core"
 	"github.com/adrg/xdg"
 )
 
@@ -157,6 +157,29 @@ func (s *Service) Get(key string, out any) error {
 	}
 
 	return fmt.Errorf("key '%s' not found in config", key)
+}
+
+// SaveStruct saves an arbitrary struct to a JSON file in the config directory.
+func (s *Service) SaveStruct(key string, data interface{}) error {
+	filePath := filepath.Join(s.ConfigDir, key+".json")
+	jsonData, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal struct for key '%s': %w", key, err)
+	}
+	return os.WriteFile(filePath, jsonData, 0644)
+}
+
+// LoadStruct loads an arbitrary struct from a JSON file in the config directory.
+func (s *Service) LoadStruct(key string, data interface{}) error {
+	filePath := filepath.Join(s.ConfigDir, key+".json")
+	jsonData, err := os.ReadFile(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil // Return nil if the file doesn't exist
+		}
+		return fmt.Errorf("failed to read struct file for key '%s': %w", key, err)
+	}
+	return json.Unmarshal(jsonData, data)
 }
 
 // Set updates a configuration value and saves the config.
