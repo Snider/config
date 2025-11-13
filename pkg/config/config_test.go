@@ -194,4 +194,77 @@ func TestConfigService(t *testing.T) {
 			t.Errorf("Expected zero Timeout, got '%d'", actualConfig.Timeout)
 		}
 	})
+
+	t.Run("Get non-existent key", func(t *testing.T) {
+		_, cleanup := setupTestEnv(t)
+		defer cleanup()
+
+		s, err := New()
+		if err != nil {
+			t.Fatalf("New() failed: %v", err)
+		}
+
+		var value string
+		err = s.Get("non-existent", &value)
+		if err == nil {
+			t.Errorf("Expected an error for non-existent key, but got nil")
+		}
+	})
+
+	t.Run("Set non-existent key", func(t *testing.T) {
+		_, cleanup := setupTestEnv(t)
+		defer cleanup()
+
+		s, err := New()
+		if err != nil {
+			t.Fatalf("New() failed: %v", err)
+		}
+
+		err = s.Set("non-existent", "value")
+		if err == nil {
+			t.Errorf("Expected an error for non-existent key, but got nil")
+		}
+	})
+
+	t.Run("SaveStruct with unmarshallable type", func(t *testing.T) {
+		_, cleanup := setupTestEnv(t)
+		defer cleanup()
+
+		s, err := New()
+		if err != nil {
+			t.Fatalf("New() failed: %v", err)
+		}
+
+		err = s.SaveStruct("test", make(chan int))
+		if err == nil {
+			t.Errorf("Expected an error for unmarshallable type, but got nil")
+		}
+	})
+
+	t.Run("LoadStruct with invalid JSON", func(t *testing.T) {
+		_, cleanup := setupTestEnv(t)
+		defer cleanup()
+
+		s, err := New()
+		if err != nil {
+			t.Fatalf("New() failed: %v", err)
+		}
+
+		key := "invalid"
+		filePath := filepath.Join(s.ConfigDir, key+".json")
+		if err := os.WriteFile(filePath, []byte("invalid json"), 0644); err != nil {
+			t.Fatalf("Failed to write invalid json file: %v", err)
+		}
+
+		type CustomConfig struct {
+			APIKey  string `json:"apiKey"`
+			Timeout int    `json:"timeout"`
+		}
+
+		var actualConfig CustomConfig
+		err = s.LoadStruct(key, &actualConfig)
+		if err == nil {
+			t.Errorf("Expected an error for invalid JSON, but got nil")
+		}
+	})
 }

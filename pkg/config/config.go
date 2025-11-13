@@ -113,6 +113,7 @@ func Register(c *core.Core) (any, error) {
 		return nil, errors.New("config: createServiceInstance returned a nil service instance with no error")
 	}
 	s.ServiceRuntime = core.NewServiceRuntime(c, Options{})
+	c.SetConfig(s)
 	return s, nil
 }
 

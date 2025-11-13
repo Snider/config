@@ -20,10 +20,31 @@ func (r *ServiceRuntime[T]) Core() *Core {
 }
 
 // Config returns the registered Config service from the core application.
-func (r *ServiceRuntime[T]) Config() {}
+func (r *ServiceRuntime[T]) Config() ConfigService {
+	return r.core.Config()
+}
 
-type Core struct{}
+type Core struct {
+	config ConfigService
+}
+
+func (c *Core) SetConfig(config ConfigService) {
+	c.config = config
+}
 
 func New() (*Core, error) {
-	return &Core{}, nil
+	c := &Core{}
+	return c, nil
+}
+
+func (c *Core) Config() ConfigService {
+	return c.config
+}
+
+type ConfigService interface {
+	Save() error
+	Get(key string, out any) error
+	Set(key string, v any) error
+	SaveStruct(key string, data interface{}) error
+	LoadStruct(key string, data interface{}) error
 }
