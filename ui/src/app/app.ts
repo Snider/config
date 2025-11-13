@@ -6,5 +6,5 @@ import { Component, signal } from '@angular/core';
   standalone: true
 })
 export class App {
-  protected readonly title = signal('config');
+  public readonly title = signal('config');
 }
