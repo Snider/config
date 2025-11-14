@@ -5,6 +5,8 @@ go 1.25
 require (
 	github.com/adrg/xdg v0.5.3
 	github.com/spf13/cobra v1.10.1
+	gopkg.in/ini.v1 v1.67.0
+	gopkg.in/yaml.v2 v2.4.0
 )
 
 require (
