@@ -1,3 +1,37 @@
+// Package config provides a configuration management service that handles
+// loading, saving, and accessing application settings. It supports both a
+// main JSON configuration file and auxiliary data stored in various formats
+// like YAML, INI, and XML. The service is designed to be extensible and
+// can be used with static or dynamic dependency injection.
+//
+// The Service struct is the core of the package, providing methods to
+// interact with the configuration. It manages file paths, default values,
+// and the serialization/deserialization of data.
+//
+// Basic usage involves creating a new Service instance and then using its
+// methods to get, set, and manage configuration data.
+//
+// Example:
+//
+//	// Create a new config service.
+//	cfg, err := config.New()
+//	if err != nil {
+//		log.Fatalf("failed to create config service: %v", err)
+//	}
+//
+//	// Set a new value.
+//	err = cfg.Set("language", "fr")
+//	if err != nil {
+//		log.Fatalf("failed to set config value: %v", err)
+//	}
+//
+//	// Retrieve a value.
+//	var lang string
+//	err = cfg.Get("language", &lang)
+//	if err != nil {
+//		log.Fatalf("failed to get config value: %v", err)
+//	}
+//	fmt.Printf("Language: %s\n", lang)
 package config
 
 import (
@@ -16,11 +50,19 @@ import (
 const appName = "lethean"
 const configFileName = "config.json"
 
-// Options holds configuration for the config service.
+// Options holds configuration for the config service. This struct is provided
+// for future extensibility and currently has no fields.
 type Options struct{}
 
 // Service provides access to the application's configuration.
-// It handles loading, saving, and providing access to configuration values.
+// It handles loading, saving, and providing access to configuration values,
+// abstracting away the details of file I/O and data serialization.
+// The Service is designed to be a central point for all configuration-related
+// operations within the application.
+//
+// The fields of the Service struct are automatically saved to and loaded from
+// a JSON configuration file. The `json:"-"` tag on ServiceRuntime prevents
+// it from being serialized.
 type Service struct {
 	*core.ServiceRuntime[Options] `json:"-"`
 
@@ -37,7 +79,11 @@ type Service struct {
 	Language     string   `json:"language"`
 }
 
-// createServiceInstance contains the common logic for initializing a Service struct.
+// createServiceInstance handles the setup of the configuration service. It
+// resolves necessary paths, creates directories, and loads the configuration
+// file if it exists. If the configuration file is not found, it creates a new
+// one with default values. This function is not exported and is used internally
+// by the New and Register constructors.
 func createServiceInstance() (*Service, error) {
 	// --- Path and Directory Setup ---
 	homeDir, err := os.UserHomeDir()
@@ -95,14 +141,27 @@ func createServiceInstance() (*Service, error) {
 	return s, nil
 }
 
-// New is the constructor for static dependency injection.
-// It creates a Service instance without initializing the core.Runtime field.
+// New creates a new instance of the configuration service. This constructor is
+// intended for static dependency injection, where the service is created and
+// managed manually. It initializes the service with default paths and values,
+// and loads any existing configuration from disk.
+//
+// Example:
+//
+//	cfg, err := config.New()
+//	if err != nil {
+//		log.Fatalf("Failed to initialize config: %v", err)
+//	}
+//	// Use cfg to access configuration settings.
 func New() (*Service, error) {
 	return createServiceInstance()
 }
 
-// Register is the constructor for dynamic dependency injection (used with core.WithService).
-// It creates a Service instance and initializes its core.Runtime field.
+// Register creates a new instance of the configuration service and registers it
+// with the application's core. This constructor is intended for dynamic
+// dependency injection, where services are managed by a central core component.
+// It performs the same initialization as New, but also integrates the service
+// with the provided core instance.
 func Register(c *core.Core) (any, error) {
 	s, err := createServiceInstance()
 	if err != nil {
@@ -117,7 +176,17 @@ func Register(c *core.Core) (any, error) {
 	return s, nil
 }
 
-// Save writes the current configuration to config.json.
+// Save writes the current configuration to a JSON file. The location of the file
+// is determined by the ConfigPath field of the Service struct. This method is
+// typically called automatically by Set, but can be used to explicitly save
+// changes.
+//
+// Example:
+//
+//	err := cfg.Save()
+//	if err != nil {
+//		log.Printf("Error saving configuration: %v", err)
+//	}
 func (s *Service) Save() error {
 	data, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
@@ -130,7 +199,19 @@ func (s *Service) Save() error {
 	return nil
 }
 
-// Get retrieves a configuration value by its key.
+// Get retrieves a configuration value by its key. The key corresponds to the
+// JSON tag of a field in the Service struct. The retrieved value is stored in
+// the `out` parameter, which must be a non-nil pointer to a variable of the
+// correct type.
+//
+// Example:
+//
+//	var currentLanguage string
+//	err := cfg.Get("language", &currentLanguage)
+//	if err != nil {
+//		log.Printf("Could not retrieve language setting: %v", err)
+//	}
+//	fmt.Println("Current language is:", currentLanguage)
 func (s *Service) Get(key string, out any) error {
 	val := reflect.ValueOf(s).Elem()
 	typ := val.Type()
@@ -161,6 +242,21 @@ func (s *Service) Get(key string, out any) error {
 }
 
 // SaveStruct saves an arbitrary struct to a JSON file in the config directory.
+// This is useful for storing complex data that is not part of the main
+// configuration. The `key` parameter is used as the filename (with a .json
+// extension).
+//
+// Example:
+//
+//	type UserPreferences struct {
+//		Theme string `json:"theme"`
+//		Notifications bool `json:"notifications"`
+//	}
+//	prefs := UserPreferences{Theme: "dark", Notifications: true}
+//	err := cfg.SaveStruct("user_prefs", prefs)
+//	if err != nil {
+//		log.Printf("Error saving user preferences: %v", err)
+//	}
 func (s *Service) SaveStruct(key string, data interface{}) error {
 	filePath := filepath.Join(s.ConfigDir, key+".json")
 	jsonData, err := json.MarshalIndent(data, "", "  ")
@@ -171,6 +267,18 @@ func (s *Service) SaveStruct(key string, data interface{}) error {
 }
 
 // LoadStruct loads an arbitrary struct from a JSON file in the config directory.
+// The `key` parameter specifies the filename (without the .json extension). The
+// loaded data is unmarshaled into the `data` parameter, which must be a
+// non-nil pointer to a struct.
+//
+// Example:
+//
+//	var prefs UserPreferences
+//	err := cfg.LoadStruct("user_prefs", &prefs)
+//	if err != nil {
+//		log.Printf("Error loading user preferences: %v", err)
+//	}
+//	fmt.Printf("User theme is: %s", prefs.Theme)
 func (s *Service) LoadStruct(key string, data interface{}) error {
 	filePath := filepath.Join(s.ConfigDir, key+".json")
 	jsonData, err := os.ReadFile(filePath)
@@ -183,7 +291,16 @@ func (s *Service) LoadStruct(key string, data interface{}) error {
 	return json.Unmarshal(jsonData, data)
 }
 
-// Set updates a configuration value and saves the config.
+// Set updates a configuration value and saves the change to the configuration
+// file. The key corresponds to the JSON tag of a field in the Service struct.
+// The provided value `v` must be of a type that is assignable to the field.
+//
+// Example:
+//
+//	err := cfg.Set("default_route", "/home")
+//	if err != nil {
+//		log.Printf("Failed to set default route: %v", err)
+//	}
 func (s *Service) Set(key string, v any) error {
 	val := reflect.ValueOf(s).Elem()
 	typ := val.Type()
